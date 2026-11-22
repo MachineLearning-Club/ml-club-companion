@@ -75,7 +75,7 @@ export default function App(){
    return {...prev,workspaces:{...prev.workspaces,[puzzle.id]:answer},histories:{...prev.histories,[puzzle.id]:after}};
  })};
  const solve=()=>{if(!puzzle)return;setProfile(prev=>prev?award(prev,puzzle,'solved'):prev)};
- const skip=()=>{if(!puzzle || !profile||!canSpend(profile,2))return;setProfile(prev=>prev?award({...prev,credits:prev.credits-2},puzzle,'skipped'):prev)};
+ const skip=()=>{if(!puzzle || !profile||profile.completed[puzzle.id]||!canSpend(profile,2))return;setProfile(prev=>prev?award({...prev,credits:prev.credits-2},puzzle,'skipped'):prev)};
  const hint=()=>{
    if(!profile||!puzzle)return false;
    if(profile.hintClaims?.[puzzle.id])return true;
@@ -88,8 +88,8 @@ export default function App(){
    if(!playing)return;
    const idx=mainPuzzles.findIndex(p=>p.id===playing);
    const nextPuzzle=idx<0?null:mainPuzzles.slice(idx+1).find(p=>!((guest?guestProfile:mainProfile)?.completed[p.id]));
-   if(nextPuzzle){setPlaying(nextPuzzle.id);setProfile(prev=>prev?{...prev,activePuzzle:nextPuzzle.id}:prev)}
-   else {setPlaying(null);setTab('academy');setSelectedWeek(1);setProfile(prev=>prev?{...prev,activePuzzle:null}:prev);setNotice('First vertical slice completed. Additional Week 1 sequences are being authored.');}
+   if(nextPuzzle){setPlaying(nextPuzzle.id);setSelectedWeek(nextPuzzle.week);setProfile(prev=>prev?{...prev,activePuzzle:nextPuzzle.id}:prev)}
+   else {setPlaying(null);setTab('academy');setSelectedWeek(puzzles.find(p=>p.id===playing)?.week??1);setProfile(prev=>prev?{...prev,activePuzzle:null}:prev);setNotice('All currently authored core puzzles completed. Unauthored chapters remain previews until their content is validated.');}
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[playing,guest,guestProfile,mainProfile]);
  const saveProject=(project:LabProject)=>{setCurrentProjects(prev=>[project,...prev.filter(p=>p.id!==project.id)]);if(!guest){storage?.saveProject(project).catch(e=>setNotice(`Project save failed: ${String(e)}`));}};

@@ -17,7 +17,7 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
   const dragRef=useRef<string|null>(null);
   const isSolved=profile.completed[p.id]==='solved';
   const isSkipped=profile.completed[p.id]==='skipped';
-  const submitted=isSolved||isSkipped||feedback==='correct';
+  const submitted=isSolved||feedback==='correct';
   useEffect(()=>{setSelectedItem(null);setWrong(0);setHintVisible(Boolean(profile.hintClaims?.[p.id]));setAssistance(false);setSupportSolved(false);setFeedback(null);setExplainLayer('intuition');},[p.id]);
   useEffect(()=>{
     if(feedback!=='correct' || p.discovery || p.isCheckpoint || p.advanced)return;
@@ -101,6 +101,7 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
         {answer.trained&&model&&<div className="model-readout"><div><span>LEARNED THRESHOLD</span><strong>{model.threshold}°C</strong></div><div><span>TRAINING ACCURACY</span><strong>{Math.round(model.accuracy*100)}%</strong></div></div>}
       </>}
     </div>
+    {isSkipped&&!submitted&&<div className="guest-banner" role="status">Previously skipped. Solve this puzzle now to verify mastery and earn its one-time XP.</div>}
     {feedback==='wrong'&&!submitted&&<p className="feedback wrong" role="status">Not quite. Inspect the examples and try another approach.</p>}
     {assistance&&!submitted&&<div className="assistance" aria-label="Adaptive assistance"><div className="assistance-title"><Lightbulb size={17}/> MINI PRACTICE · FREE</div><p>Which part of an observation should guide a classification: a relevant feature or an unrelated decoration?</p><div className="assistance-actions"><button onClick={()=>setSupportSolved(true)}>Relevant feature</button><button onClick={()=>setSupportSolved(false)}>Decoration</button></div>{supportSolved&&<p className="success-text">Exactly. Return to the original puzzle with your workspace preserved.</p>}<button className="linklike" onClick={()=>setAssistance(false)}>Return to puzzle</button></div>}
     {hintVisible&&!submitted&&<div className="hint-box"><Lightbulb size={16}/><span>{p.hint}</span></div>}
@@ -109,7 +110,7 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
     {!submitted&&<div className="support-actions"><button onClick={onUndo} disabled={!(profile.histories?.[p.id]?.past.length)}><Undo2 size={17}/> Undo</button><button onClick={onRedo} disabled={!(profile.histories?.[p.id]?.future.length)}><Redo2 size={17}/> Redo</button></div>}
     <div className="player-footer">
       {submitted?<button className="action-button full" onClick={onNext}>Continue <ArrowRight size={18}/></button>:<button className="action-button full" onClick={check} disabled={!correct && p.kind==='train'&&!answer.trained}>Check answer <ArrowRight size={18}/></button>}
-      {!submitted&&<div className="support-actions"><button onClick={showHint} disabled={hintVisible||profile.credits<1&&!profile.hintClaims?.[p.id]}><CircleHelp size={17}/> Hint · 1 credit</button><button onClick={onSkip} disabled={profile.credits<2}>Skip · 2 credits <ArrowRight size={14}/></button></div>}
+      {!submitted&&<div className="support-actions"><button onClick={showHint} disabled={hintVisible||profile.credits<1&&!profile.hintClaims?.[p.id]}><CircleHelp size={17}/> Hint · 1 credit</button><button onClick={onSkip} disabled={isSkipped||profile.credits<2}>Skip · 2 credits <ArrowRight size={14}/></button></div>}
       <div className="wallet"><Zap size={14}/> {profile.credits}/6 hint credits <span>· +2 every 12 hours</span></div>
       {['w1-06','w1-07','w1-08','w1-09','w1-10'].includes(p.id)&&<button className="linklike" onClick={onLab}><FlaskConical size={15}/> Copy this model into Laboratory</button>}
     </div>

@@ -41,6 +41,7 @@ export type Puzzle = {
   discovery?: { title: string; intuition: string; example: string; technical: string };
   isCheckpoint?: boolean;
   advanced?: boolean;
+  unlockAfter?: string[];
 };
 export type SequencePlan = {
   id: string;

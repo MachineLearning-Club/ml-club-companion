@@ -36,10 +36,10 @@ export function Academy({profile,guest,selectedWeek,onSelectWeek,onPlay}:Props){
       {w.status==='planned'?<div className="not-ready"><LockKeyhole size={17}/><div><strong>Content pack scaffolded</strong><p>This chapter is in development. Its lesson description is visible; playable puzzles are not yet authored.</p></div></div>:<>
         <div className="section-row"><h3>Available puzzle sequences</h3><span>{w.puzzles.length} puzzles</span></div>
         <div className="puzzle-list">{w.puzzles.map(p=>{
-          const status=profile.completed[p.id]; const available=p.advanced?(guest||!!profile.completed['w1-12']):isPlayable(p);
+          const status=profile.completed[p.id]; const available=p.advanced?(guest||(p.unlockAfter?.length?p.unlockAfter.every(id=>!!profile.completed[id]):w.puzzles.filter(q=>!q.advanced).every(q=>!!profile.completed[q.id]))):isPlayable(p);
           return <button key={p.id} className="puzzle-row" disabled={!available} onClick={()=>onPlay(p)}><span className={`puzzle-status ${status??''}`}>{status==='solved'?<Check size={16}/>:status==='skipped'?'↷':p.advanced?<Sparkles size={16}/>:<Circle size={13}/>}</span><span><strong>{p.title}</strong><small>{p.advanced?'Advanced · optional':p.sequence}</small></span>{available?<ArrowRight size={16}/>:<LockKeyhole size={15}/>}</button>;
         })}</div>
-        {firstWeekUnfinished&&<p className="small-muted">This is the first playable vertical slice, not a claim that the entire week is finished. More Week 1 sequences can be authored independently.</p>}
+        {firstWeekUnfinished&&<p className="small-muted">This is a playable development slice, not a claim that the curriculum for this week is complete.</p>}
       </>}
     </div>
     <p className="source-note"><BookOpen size={14}/> Curriculum aligned to machinelearning-club.github.io</p>
