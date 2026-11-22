@@ -1,0 +1,88 @@
+export type Domain = 'Foundations' | 'Probability & Data' | 'Decision Trees' | 'Clustering & Similarity' | 'Computer Vision' | 'Neural Networks' | 'Generative AI' | 'ML Engineering';
+export type PuzzleKind = 'sort' | 'choice' | 'order' | 'train' | 'predict' | 'repair' | 'numeric' | 'multi' | 'connect' | 'parameters' | 'trace';
+export type PuzzleAnswer = {
+  assignments?: Record<string, string>;
+  selected?: string;
+  order?: string[];
+  trained?: boolean;
+  numberValue?: number;
+  selectedMany?: string[];
+  connections?: [string,string][];
+  parameters?: Record<string,number>;
+  trace?: string[];
+};
+export type Puzzle = {
+  id: string;
+  week: number;
+  sequence: string;
+  title: string;
+  instruction: string;
+  kind: PuzzleKind;
+  concept: string;
+  domain: Domain;
+  // All values below are authored, inspectable content. Validation is deterministic.
+  items?: { id: string; title: string; subtitle?: string; shape?: 'circle' | 'square'; color?: string }[];
+  buckets?: { id: string; title: string }[];
+  correctAssignments?: Record<string, string>;
+  options?: { id: string; title: string; detail?: string }[];
+  correctChoice?: string;
+  steps?: { id: string; title: string }[];
+  correctOrder?: string[];
+  // Reusable, declarative, engine-checked mechanics for all 15 weeks.
+  numeric?: { expected: number; tolerance: number; min?: number; max?: number; unit?: string };
+  correctChoices?: string[];
+  correctConnections?: [string,string][];
+  parameterGoal?: { key:string; min:number; max:number; target:number; tolerance:number };
+  correctTrace?: string[];
+  variants?: { id:string; seed:number; description:string }[];
+  difficulty?: 1 | 2 | 3 | 4 | 5;
+  templateId?: string;
+  hint: string;
+  discovery?: { title: string; intuition: string; example: string; technical: string };
+  isCheckpoint?: boolean;
+  advanced?: boolean;
+};
+export type SequencePlan = {
+  id: string;
+  title: string;
+  objective: string;
+  mechanics: PuzzleKind[];
+  microPuzzleTarget: number;
+  advancedIdea?: string;
+  validatorRequirement: string;
+};
+export type WeekContent = {
+  number: number;
+  module: 1 | 2 | 3;
+  title: string;
+  summary: string;
+  topics: string[];
+  visual: 'rules' | 'clusters' | 'pixels' | 'networks' | 'systems';
+  status: 'vertical-slice' | 'planned';
+  puzzles: Puzzle[];
+  sequences?: SequencePlan[];
+};
+export type ProjectBase={schemaVersion:1;id:string;title:string;createdAt:string;updatedAt:string;origin?:string};
+export type ThresholdLabProject=ProjectBase&{kind:'threshold';data:{temperature:number;label:0|1}[];testTemperature:number};
+export type KMeansLabProject=ProjectBase&{kind:'kmeans';points:[number,number][];initialCentroids:[number,number][];k:number;iteration:number};
+export type LabProject=ThresholdLabProject|KMeansLabProject;
+export type Progress = 'solved' | 'skipped';
+export type SavedPuzzleHistory = {past:PuzzleAnswer[];future:PuzzleAnswer[]};
+export type LearningProfile = {
+  schemaVersion: 1;
+  id: string;
+  createdAt: string;
+  lastUpdated: string;
+  completed: Record<string, Progress>;
+  workspaces: Record<string, PuzzleAnswer>;
+  histories?: Record<string,SavedPuzzleHistory>;
+  hintClaims?: Record<string,boolean>;
+  xpAwards: Record<string, number>;
+  discoveries: string[];
+  activePuzzle: string | null;
+  currentWeek: number;
+  credits: number;
+  lastReplenished: string;
+  settings: { reducedMotion: boolean; locale: 'en' | 'ro' };
+};
+export const domains: Domain[] = ['Foundations','Probability & Data','Decision Trees','Clustering & Similarity','Computer Vision','Neural Networks','Generative AI','ML Engineering'];

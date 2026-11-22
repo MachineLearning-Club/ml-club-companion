@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "target":"ES2022", "module":"CommonJS", "moduleResolution":"Node",
+    "strict":true,"outDir":".test-build", "rootDir":"src", "skipLibCheck":true
+  },
+  "include":["src/core/**/*.ts","src/content/**/*.ts","src/weeks/**/*.ts"]
+}
