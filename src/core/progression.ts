@@ -27,17 +27,20 @@ export function validatePuzzle(p:Puzzle,a:PuzzleAnswer,profile:LearningProfile):
     case 'choice': return !!a.selected && a.selected===p.correctChoice;
     case 'order': return (a.order||p.steps?.map(s=>s.id)||[]).join('|')===p.correctOrder?.join('|');
     case 'train': {
+      if(p.week!==1) return !!a.trained && (!p.correctChoice || a.selected===p.correctChoice);
       const data=labelledData(profile);
       if(data.length!==WEEK1_EXAMPLES.length || !a.trained) return false;
       return trainThreshold(data).accuracy===1;
     }
     case 'predict': {
+      if(p.week!==1) return !!a.selected && a.selected===p.correctChoice;
       const data=labelledData(profile);
       if(data.length!==WEEK1_EXAMPLES.length) return false;
       const model=trainThreshold(data);
       return a.selected === String(predictThreshold(model.threshold,22));
     }
     case 'repair': {
+      if(p.week!==1) return !!a.trained && (!p.correctChoice || a.selected===p.correctChoice);
       if(!a.trained || a.selected !== 'ON') return false;
       const data=labelledData(profile);
       if(data.length!==WEEK1_EXAMPLES.length) return false;

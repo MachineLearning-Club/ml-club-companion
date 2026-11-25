@@ -30,5 +30,5 @@ export function sequenceContract(id:string,title:string,objective:string,mechani
   return {id,title,objective,mechanics,validatorRequirement,microPuzzleTarget,advancedIdea};
 }
 export function exampleAnswerFor(p:Puzzle){
-  switch(p.kind){case 'sort':return {assignments:{...p.correctAssignments}};case 'choice':return {selected:p.correctChoice};case 'order':return {order:[...(p.correctOrder??[])]};case 'numeric':return {numberValue:p.numeric?.expected};case 'multi':return {selectedMany:[...(p.correctChoices??[])]};case 'connect':return {connections:[...(p.correctConnections??[])]};case 'parameters':return {parameters:p.parameterGoal?{[p.parameterGoal.key]:p.parameterGoal.target}:{}};case 'trace':return {trace:[...(p.correctTrace??[])]};default:return {};}
+  switch(p.kind){case 'sort':case 'dataset-label':return {assignments:{...p.correctAssignments}};case 'choice':return {selected:p.correctChoice};case 'order':return {order:[...(p.correctOrder??[])]};case 'numeric':case 'slider':return {numberValue:p.numeric?.expected};case 'multi':return {selectedMany:[...(p.correctChoices??[])]};case 'connect':case 'drag-connect':return {connections:[...(p.correctConnections??[])]};case 'parameters':return {parameters:p.parameterGoal?{[p.parameterGoal.key]:p.parameterGoal.target}:{}};case 'trace':return {trace:[...(p.correctTrace??[])]};default:return {};}
 }

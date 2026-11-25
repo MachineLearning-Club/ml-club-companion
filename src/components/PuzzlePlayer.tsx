@@ -4,8 +4,29 @@ import type { LearningProfile, Puzzle, PuzzleAnswer } from '../core/types';
 import { labelledData, validatePuzzle, puzzleXP } from '../core/progression';
 import { trainThreshold, predictThreshold } from '../core/algorithms';
 
-type Props={puzzle:Puzzle;profile:LearningProfile;guest:boolean;position:number;total:number;onUpdate:(answer:PuzzleAnswer)=>void;onUndo:()=>void;onRedo:()=>void;onSolve:()=>void;onSkip:()=>void;onExit:()=>void;onNext:()=>void;onHint:()=>boolean;onLab:()=>void};
-export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onUndo,onRedo,onSolve,onSkip,onExit,onNext,onHint,onLab}:Props){
+type Props={puzzle:Puzzle;profile:LearningProfile;guest:boolean;position:number;total:number;onUpdate:(answer:PuzzleAnswer)=>void;onUndo:()=>void;onRedo:()=>void;onSolve:()=>void;onSkip:()=>void;onExit:()=>void;onNext:()=>void;onHint:()=>boolean;onLab:()=>void;onTrain?:(p:Puzzle)=>string|void;onPredict?:(p:Puzzle,answer:PuzzleAnswer)=>void};
+
+/** Dispatch training for a puzzle based on its templateId prefix. */
+function dispatchTrain(p: Puzzle, profile: LearningProfile): string | null {
+  if (!p.templateId) return null;
+  if (p.templateId.startsWith('threshold:')) {
+    const data = labelledData(profile);
+    if (!data.length) return 'No training data available.';
+    try {
+      const m = trainThreshold(data);
+      return `Threshold model trained. Threshold: ${m.threshold}°C, Accuracy: ${Math.round(m.accuracy * 100)}%`;
+    } catch { return 'Training failed — check your data.'; }
+  }
+  if (p.templateId.startsWith('kmeans:')) {
+    return 'K-Means: use the Laboratory workspace to run iterative clustering.';
+  }
+  if (p.templateId.startsWith('id3:')) {
+    return 'ID3: decision tree training requires labelled categorical data from the puzzle spec.';
+  }
+  return null;
+}
+
+export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onUndo,onRedo,onSolve,onSkip,onExit,onNext,onHint,onLab,onTrain,onPredict}:Props){
   const answer=profile.workspaces[p.id]??{};
   const [selectedItem,setSelectedItem]=useState<string|null>(null);
   const [wrong,setWrong]=useState(0);
@@ -14,11 +35,12 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
   const [supportSolved,setSupportSolved]=useState(false);
   const [feedback,setFeedback]=useState<'correct'|'wrong'|null>(null);
   const [explainLayer,setExplainLayer]=useState<'intuition'|'example'|'technical'>('intuition');
+  const [trainInfo,setTrainInfo]=useState<string|null>(null);
   const dragRef=useRef<string|null>(null);
   const isSolved=profile.completed[p.id]==='solved';
   const isSkipped=profile.completed[p.id]==='skipped';
   const submitted=isSolved||feedback==='correct';
-  useEffect(()=>{setSelectedItem(null);setWrong(0);setHintVisible(Boolean(profile.hintClaims?.[p.id]));setAssistance(false);setSupportSolved(false);setFeedback(null);setExplainLayer('intuition');},[p.id]);
+  useEffect(()=>{setSelectedItem(null);setWrong(0);setHintVisible(Boolean(profile.hintClaims?.[p.id]));setAssistance(false);setSupportSolved(false);setFeedback(null);setExplainLayer('intuition');setTrainInfo(null);},[p.id]);
   useEffect(()=>{
     if(feedback!=='correct' || p.discovery || p.isCheckpoint || p.advanced)return;
     const t=setTimeout(onNext,700);return ()=>clearTimeout(t);
@@ -32,7 +54,7 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
     onUpdate({...answer,assignments:{...(answer.assignments||{}),[id]:bucket}});
     setSelectedItem(null);setFeedback(null);
   };
-  const choose=(id:string)=>{if(!submitted){onUpdate({...answer,selected:id});setFeedback(null);}};
+  const choose=(id:string)=>{if(!submitted){const next={...answer,selected:id};onUpdate(next);if(p.kind==='predict')onPredict?.(p,next);setFeedback(null);}};
   const check=()=>{
     if(submitted)return;
     if(correct){setFeedback('correct');onSolve();}
@@ -40,6 +62,14 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
   };
   const showHint=()=>{if(hintVisible)return;if(onHint())setHintVisible(true);};
   const ordering=answer.order??p.steps?.map(s=>s.id)??[];
+  // Puzzle choices must not be shown in the authored answer order.
+  const traceChoices=useMemo(()=>{
+    const choices=[...new Set(p.correctTrace??[])];
+    let seed=[...p.id].reduce((s,c)=>((s*31+c.charCodeAt(0))>>>0),2166136261);
+    for(let i=choices.length-1;i>0;i--){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const j=seed%(i+1);[choices[i],choices[j]]=[choices[j],choices[i]];}
+    if(choices.length>1&&choices.every((step,i)=>step===p.correctTrace?.[i]))choices.reverse();
+    return choices;
+  },[p.id,p.correctTrace]);
   const move=(index:number,offset:number)=>{
     if(submitted || index+offset<0 || index+offset>=ordering.length)return;
     const next=[...ordering];[next[index],next[index+offset]]=[next[index+offset],next[index]];onUpdate({...answer,order:next});setFeedback(null);
@@ -52,6 +82,10 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
   };
   const trainingData=labelledData(profile);
   const repaired=answer.selected==='ON'&&model?trainThreshold([...trainingData,{temperature:19,label:1}]):null;
+
+  // Determine if this is week-1 train/predict/repair or generic dispatch
+  const isWeek1TrainPuzzle = p.week===1 && (p.kind==='train'||p.kind==='predict'||p.kind==='repair');
+
   return <section className="player" onPointerUp={updateDrop} aria-label={`Puzzle ${position} of ${total}`}>
     <header className="player-top">
       <button className="icon-button" aria-label="Exit to Academy" onClick={onExit}><ArrowLeft size={21}/></button>
@@ -64,7 +98,7 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
       <p>{p.instruction}</p>
     </div>
     <div className="puzzle-stage">
-      {p.kind==='sort' && <>
+      {(p.kind==='sort'||p.kind==='dataset-label') && <>
         <div className="stage-caption">SIGNAL INPUTS <span>{Object.keys(answer.assignments??{}).length}/{p.items?.length} assigned</span></div>
         <div className="signal-grid">
           {p.items?.map(i=><button key={i.id} className={`signal-card ${selectedItem===i.id?'selected':''} ${answer.assignments?.[i.id]?'assigned':''}`}
@@ -82,23 +116,43 @@ export function PuzzlePlayer({puzzle:p,profile,guest,position,total,onUpdate,onU
           {p.buckets?.map(b=><button key={b.id} data-bucket={b.id} disabled={submitted} className="bucket" onClick={()=>selectedItem&&assign(selectedItem,b.id)} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();assign(e.dataTransfer.getData('text/plain'),b.id)}}><span className="bucket-icon">◇</span>{b.title}<span className="bucket-count">{Object.values(answer.assignments??{}).filter(x=>x===b.id).length}</span></button>)}
         </div>
       </>}
-      {(p.kind==='choice'||p.kind==='predict'||p.kind==='repair')&&<>
+      {(p.kind==='choice'||(p.kind==='predict'&&isWeek1TrainPuzzle)||(p.kind==='repair'&&isWeek1TrainPuzzle))&&<>
         {p.kind==='predict'&&model&&<div className="model-readout"><div><span>LEARNED THRESHOLD</span><strong>{model.threshold}°C</strong></div><div><span>MODEL ACCURACY</span><strong>{Math.round(model.accuracy*100)}%</strong></div></div>}
         {p.kind==='repair'&&model&&<div className="model-readout warning"><div><span>OLD PREDICTION AT 19°C</span><strong>{predictThreshold(model.threshold,19)===1?'ON':'OFF'}</strong></div><div><span>OBSERVED LABEL</span><strong>ON</strong></div></div>}
         <div className="choice-list">{p.options?.map((o,i)=><button key={o.id} disabled={submitted} className={`choice ${answer.selected===o.id?'selected':''}`} onClick={()=>choose(o.id)}><span className="choice-index">{String.fromCharCode(65+i)}</span><span className="choice-label"><strong>{o.title}</strong>{o.detail&&<small>{o.detail}</small>}</span><span className="choice-state">{answer.selected===o.id?<Check size={16}/>:null}</span></button>)}</div>
         {p.kind==='repair'&&<><button disabled={submitted||!answer.selected} className="secondary-button full" onClick={()=>onUpdate({...answer,trained:true})}>Retrain with selected observation <RotateCcw size={16}/></button>{answer.trained&&<div className="model-note">{repaired?`New threshold: ${repaired.threshold}°C · training accuracy: ${Math.round(repaired.accuracy*100)}%`:'The selected observation contradicts the known evidence. Check the label.'}</div>}</>}
       </>}
       {p.kind==='order'&&<><div className="stage-caption">EXECUTION ORDER <span>Move blocks up or down</span></div><div className="order-list">{ordering.map((id,index)=><div className="order-item" key={id}><span className="order-index">{index+1}</span><span>{p.steps?.find(s=>s.id===id)?.title}</span><div className="order-controls"><button disabled={submitted||index===0} onClick={()=>move(index,-1)} aria-label={`Move ${id} up`}><MoveUp size={18}/></button><button disabled={submitted||index===ordering.length-1} onClick={()=>move(index,1)} aria-label={`Move ${id} down`}><MoveDown size={18}/></button></div></div>)}</div></>}
-      {p.kind==='numeric'&&<div className="numeric-editor"><label className="field-label" htmlFor="numeric-answer">YOUR CALCULATED ANSWER {p.numeric?.unit??''}</label><input id="numeric-answer" type="number" inputMode="decimal" step="any" className="project-title-input" value={answer.numberValue??''} disabled={submitted} onChange={e=>onUpdate({...answer,numberValue:e.target.value===''?undefined:Number(e.target.value)})}/></div>}
-      {p.kind==='multi'&&<div className="choice-list">{p.options?.map(o=><button className={`choice ${(answer.selectedMany??[]).includes(o.id)?'selected':''}`} key={o.id} disabled={submitted} aria-pressed={(answer.selectedMany??[]).includes(o.id)} onClick={()=>{const prev=answer.selectedMany??[];onUpdate({...answer,selectedMany:prev.includes(o.id)?prev.filter(v=>v!==o.id):[...prev,o.id]})}}><span className="choice-label"><strong>{o.title}</strong>{o.detail&&<small>{o.detail}</small>}</span></button>)}</div>}
-      {p.kind==='parameters'&&p.parameterGoal&&<div className="numeric-editor"><label className="field-label" htmlFor="parameter-slider">{p.parameterGoal.key}: {answer.parameters?.[p.parameterGoal.key]??p.parameterGoal.min}</label><input id="parameter-slider" type="range" min={p.parameterGoal.min} max={p.parameterGoal.max} step="any" disabled={submitted} value={answer.parameters?.[p.parameterGoal.key]??p.parameterGoal.min} onChange={e=>onUpdate({...answer,parameters:{...answer.parameters,[p.parameterGoal!.key]:Number(e.target.value)}})}/></div>}
+      {(p.kind==='numeric'||p.kind==='slider')&&<div className="numeric-editor">
+        <label className="field-label" htmlFor="numeric-answer">YOUR CALCULATED ANSWER {p.numeric?.unit??''}</label>
+        {p.kind==='slider'&&p.numeric?<><input id="numeric-answer" type="range" min={p.numeric.min??0} max={p.numeric.max??1} step={0.01} className="parameter-slider" value={answer.numberValue??p.numeric.min??0} disabled={submitted} onChange={e=>onUpdate({...answer,numberValue:Number(e.target.value)})}/><span className="slider-value">{(answer.numberValue??p.numeric.min??0).toFixed(2)}</span></>:<input id="numeric-answer" type="number" inputMode="decimal" step="any" className="project-title-input" value={answer.numberValue??''} disabled={submitted} onChange={e=>onUpdate({...answer,numberValue:e.target.value===''?undefined:Number(e.target.value)})}/>}
+      </div>}
+      {p.kind==='multi'&&<div className="choice-list">{p.options?.map(o=><button className={`choice ${(answer.selectedMany??[]).includes(o.id)?'selected':''}`} key={o.id} disabled={submitted} aria-pressed={(answer.selectedMany??[]).includes(o.id)} onClick={()=>{const prev=answer.selectedMany??[];onUpdate({...answer,selectedMany:prev.includes(o.id)?prev.filter(v=>v!==o.id):[...prev,o.id]})}}><span className="choice-label"><strong>{o.title}</strong>{o.detail&&<small>{o.detail}</small>}</span><span className="choice-state">{(answer.selectedMany??[]).includes(o.id)?<Check size={16}/>:null}</span></button>)}</div>}
+      {p.kind==='parameters'&&p.parameterGoal&&<div className="numeric-editor"><label className="field-label" htmlFor="parameter-slider">{p.parameterGoal.key}: {(answer.parameters?.[p.parameterGoal.key]??p.parameterGoal.min).toFixed(2)}</label><input id="parameter-slider" type="range" min={p.parameterGoal.min} max={p.parameterGoal.max} step={(p.parameterGoal.max-p.parameterGoal.min)/100} disabled={submitted} value={answer.parameters?.[p.parameterGoal.key]??p.parameterGoal.min} onChange={e=>onUpdate({...answer,parameters:{...answer.parameters,[p.parameterGoal!.key]:Number(e.target.value)}})}/><div className="parameter-range"><span>{p.parameterGoal.min}</span><span>{p.parameterGoal.max}</span></div></div>}
       {p.kind==='connect'&&<div className="order-list"><div className="stage-caption">CONNECT GRAPH EDGES</div>{(p.correctConnections??[]).map(([source],i)=><div className="order-item" key={`${source}-${i}`}><strong>{source}</strong><span>→</span><select disabled={submitted} aria-label={`Destination for ${source}`} value={answer.connections?.[i]?.[1]??''} onChange={e=>{const next=[...(answer.connections??[])];next[i]=[source,e.target.value];onUpdate({...answer,connections:next})}}><option value="">Select destination</option>{[...new Set((p.correctConnections??[]).flat())].map(id=><option key={id} value={id}>{id}</option>)}</select></div>)}</div>}
-      {p.kind==='trace'&&<div className="order-list"><div className="stage-caption">EXECUTION TRACE <span>Tap steps in execution order</span></div>{p.correctTrace?.map(step=><button key={step} className="choice" disabled={submitted} onClick={()=>onUpdate({...answer,trace:[...(answer.trace??[]),step]})}>{step}</button>)}<p className="small-muted">Current trace: {(answer.trace??[]).join(' → ')||'Empty'}</p><button className="secondary-button" disabled={submitted} onClick={()=>onUpdate({...answer,trace:[]})}>Clear trace</button></div>}
-      {p.kind==='train'&&<>
+      {p.kind==='trace'&&<div className="order-list"><div className="stage-caption">EXECUTION TRACE <span>Tap steps in execution order</span></div><div className="trace-steps">{traceChoices.map(step=><button key={step} className={`choice ${(answer.trace??[]).includes(step)?'selected':''}`} disabled={submitted} onClick={()=>onUpdate({...answer,trace:[...(answer.trace??[]),step]})}>{step}</button>)}</div><p className="small-muted">Current trace: {(answer.trace??[]).join(' → ')||'Empty'}</p><button className="secondary-button" disabled={submitted} onClick={()=>onUpdate({...answer,trace:[]})}>Clear trace</button></div>}
+      {p.kind==='drag-connect'&&<div className="order-list"><div className="stage-caption">DRAG TO CONNECT NODES</div><p className="small-muted">Visual node connection — connect nodes by selecting source then destination.</p>{(p.correctConnections??[]).map(([source],i)=><div className="order-item" key={`drag-${source}-${i}`}><strong>{source}</strong><span>→</span><select disabled={submitted} aria-label={`Destination for ${source}`} value={answer.connections?.[i]?.[1]??''} onChange={e=>{const next=[...(answer.connections??[])];next[i]=[source,e.target.value];onUpdate({...answer,connections:next})}}><option value="">Select destination</option>{[...new Set((p.correctConnections??[]).flat())].map(id=><option key={id} value={id}>{id}</option>)}</select></div>)}</div>}
+      {p.kind==='train'&&isWeek1TrainPuzzle&&<>
         <div className="stage-caption">LABELED TRAINING EXAMPLES <span>{trainingData.length} samples</span></div>
         <div className="data-table"><div className="data-head"><span>TEMPERATURE</span><span>LABEL</span></div>{trainingData.map((d,i)=><div className="data-row" key={i}><span>{d.temperature}°C</span><span className={d.label?'data-on':'data-off'}>{d.label?'ON':'OFF'}</span></div>)}</div>
         <button className="action-button full" disabled={submitted||trainingData.length!==6} onClick={()=>onUpdate({...answer,trained:true})}><Zap size={18}/> Train real threshold model</button>
         {answer.trained&&model&&<div className="model-readout"><div><span>LEARNED THRESHOLD</span><strong>{model.threshold}°C</strong></div><div><span>TRAINING ACCURACY</span><strong>{Math.round(model.accuracy*100)}%</strong></div></div>}
+      </>}
+      {p.kind==='train'&&!isWeek1TrainPuzzle&&<>
+        <div className="stage-caption">TRAINING PUZZLE</div>
+        <p className="small-muted">{p.instruction}</p>
+        <button className="action-button full" disabled={submitted} onClick={()=>{const custom=onTrain?.(p);const info=typeof custom==='string'?custom:dispatchTrain(p,profile);setTrainInfo(info??'Model trained.');onUpdate({...answer,trained:true});}}><Zap size={18}/> Train model</button>
+        {trainInfo&&<div className="model-note">{trainInfo}</div>}
+        {p.options&&<div className="choice-list">{p.options.map((o,i)=><button key={o.id} disabled={submitted} className={`choice ${answer.selected===o.id?'selected':''}`} onClick={()=>choose(o.id)}><span className="choice-index">{String.fromCharCode(65+i)}</span><span className="choice-label"><strong>{o.title}</strong>{o.detail&&<small>{o.detail}</small>}</span><span className="choice-state">{answer.selected===o.id?<Check size={16}/>:null}</span></button>)}</div>}
+      </>}
+      {p.kind==='predict'&&!isWeek1TrainPuzzle&&<>
+        <div className="stage-caption">PREDICTION PUZZLE</div>
+        {p.options&&<div className="choice-list">{p.options.map((o,i)=><button key={o.id} disabled={submitted} className={`choice ${answer.selected===o.id?'selected':''}`} onClick={()=>choose(o.id)}><span className="choice-index">{String.fromCharCode(65+i)}</span><span className="choice-label"><strong>{o.title}</strong>{o.detail&&<small>{o.detail}</small>}</span><span className="choice-state">{answer.selected===o.id?<Check size={16}/>:null}</span></button>)}</div>}
+      </>}
+      {p.kind==='repair'&&!isWeek1TrainPuzzle&&<>
+        <div className="stage-caption">REPAIR PUZZLE</div>
+        {p.options&&<div className="choice-list">{p.options.map((o,i)=><button key={o.id} disabled={submitted} className={`choice ${answer.selected===o.id?'selected':''}`} onClick={()=>choose(o.id)}><span className="choice-index">{String.fromCharCode(65+i)}</span><span className="choice-label"><strong>{o.title}</strong>{o.detail&&<small>{o.detail}</small>}</span><span className="choice-state">{answer.selected===o.id?<Check size={16}/>:null}</span></button>)}</div>}
+        <button disabled={submitted||!answer.selected} className="secondary-button full" onClick={()=>onUpdate({...answer,trained:true})}>Apply fix <RotateCcw size={16}/></button>
       </>}
     </div>
     {isSkipped&&!submitted&&<div className="guest-banner" role="status">Previously skipped. Solve this puzzle now to verify mastery and earn its one-time XP.</div>}
