@@ -82,3 +82,68 @@ test('skip may later earn mastery and XP, merging profiles preserves unique rewa
  assert.equal(canEnterWeek(completed,weeks.flatMap(w=>w.puzzles),2),true);
  assert.equal(canEnterWeek(base,weeks.flatMap(w=>w.puzzles),2),false);
 });
+
+test('new challenge generators pass self-check and produce valid numeric puzzles',()=>{
+  for(const kind of ['information-gain','knn-classify','perceptron-step','convolution-pixel']){
+    assert.equal(gen.generatorSelfCheck(kind,256),true,`Self-check failed for ${kind}`);
+    const p=gen.generatePractice(kind,42,3);
+    assert.deepEqual(p,gen.generatePractice(kind,42,3));
+    assert.equal(e.evaluateGeneric(p,{numberValue:p.numeric.expected}).valid,true,`${kind} expected valid`);
+    assert.equal(e.evaluateGeneric(p,{numberValue:p.numeric.expected+999}).valid,false,`${kind} wrong invalid`);
+  }
+});
+test('new puzzle kinds validate and evaluate cleanly',()=>{
+  const base={id:'new-kind',week:2,sequence:'S',title:'T',instruction:'I',concept:'C',domain:'Foundations',hint:'H'};
+  const slider={...base,kind:'slider',numeric:{expected:0.5,tolerance:0.05,min:0,max:1}};
+  e.validatePuzzleSpec(slider);
+  assert.equal(e.evaluateGeneric(slider,{numberValue:0.52}).valid,true);
+  assert.equal(e.evaluateGeneric(slider,{numberValue:0.9}).valid,false);
+  const dc={...base,kind:'drag-connect',correctConnections:[['a','b']]};
+  e.validatePuzzleSpec(dc);
+  assert.equal(e.evaluateGeneric(dc,{}).complete,false);
+  assert.equal(e.evaluateGeneric(dc,{connections:[['a','b']]}).valid,true);
+  assert.equal(e.evaluateGeneric(dc,{connections:[['b','a']]}).valid,false);
+  const dl={...base,kind:'dataset-label',
+    items:[{id:'p1',title:'P1'},{id:'p2',title:'P2'}],
+    buckets:[{id:'a',title:'A'},{id:'b',title:'B'}],
+    correctAssignments:{p1:'a',p2:'b'}};
+  e.validatePuzzleSpec(dl);
+  assert.equal(e.evaluateGeneric(dl,{}).complete,false);
+  assert.equal(e.evaluateGeneric(dl,{assignments:{p1:'a',p2:'b'}}).valid,true);
+  assert.equal(e.evaluateGeneric(dl,{assignments:{p1:'b',p2:'a'}}).valid,false);
+  assert.throws(()=>e.validatePuzzleSpec({...base,kind:'dataset-label'}));
+});
+test('Week 2 entropy and information gain use consistent weather labels',()=>{
+  const w2=weeks.find(w=>w.number===2);
+  const puzzle=(id)=>w2.puzzles.find(p=>p.id===id);
+  const entropy=-(4/6*Math.log2(4/6)+2/6*Math.log2(2/6));
+  assert.ok(Math.abs(puzzle('w2-06').numeric.expected-entropy)<1e-10);
+  assert.ok(Math.abs(puzzle('w2-11').numeric.expected-entropy)<1e-10);
+  assert.ok(Math.abs(puzzle('w2-12').numeric.expected)<1e-10);
+});
+test('all 15 weeks are playable vertical-slices with attainable valid solutions',()=>{
+  const {validatePuzzle}=require('../.test-build/core/progression.js');
+  const allPuzzles=weeks.flatMap(w=>w.puzzles);
+  let profile=createProfile();
+  for(const w of weeks){
+    assert.equal(w.status,'vertical-slice',`Week ${w.number} should be vertical-slice`);
+    assert.ok(w.puzzles.length>=15,`Week ${w.number} should have at least 15 puzzles`);
+    assert.equal(canEnterWeek(profile,allPuzzles,w.number),true,`Should be able to enter Week ${w.number}`);
+    for(const p of w.puzzles){
+      let ans=author.exampleAnswerFor(p);
+      if(p.week===1){
+        if(p.kind==='train')ans={trained:true};
+        if(p.kind==='predict')ans={selected:'0'};
+        if(p.kind==='repair')ans={selected:'ON',trained:true};
+      }else{
+        if(p.kind==='train')ans={trained:true,selected:p.correctChoice};
+        if(p.kind==='predict')ans={selected:p.correctChoice};
+        if(p.kind==='repair')ans={selected:p.correctChoice,trained:true};
+      }
+      assert.equal(validatePuzzle(p,ans,profile),true,`Valid solution rejected for ${p.id}`);
+      profile.workspaces[p.id]=ans;
+      profile=award(profile,p,'solved');
+    }
+  }
+  assert.equal(Object.keys(profile.completed).length,allPuzzles.length);
+});

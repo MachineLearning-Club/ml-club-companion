@@ -6,7 +6,7 @@ const sameSet=(a:readonly string[],b:readonly string[])=>a.length===b.length&&ne
 function edges(edges:readonly [string,string][]):string[] {return edges.map(([a,b])=>`${a.length}:${a}|${b.length}:${b}`);}
 export function evaluateGeneric(p:Puzzle,a:PuzzleAnswer):ValidationResult {
   switch(p.kind){
-    case 'sort':{
+    case 'sort':case 'dataset-label':{
       if(!p.items?.length||!p.correctAssignments)return result(false,false,'Missing classification data');
       const valid=p.items.every(item=>a.assignments?.[item.id]===p.correctAssignments?.[item.id]);
       const complete=p.items.every(item=>a.assignments?.[item.id]!==undefined);
@@ -30,7 +30,7 @@ export function evaluateGeneric(p:Puzzle,a:PuzzleAnswer):ValidationResult {
       if(!p.correctChoices?.length)throw new Error(`Missing multi-answer key ${p.id}`);
       const picks=a.selectedMany??[];return result(sameSet(picks,p.correctChoices),picks.length>0,'Check every selected option');
     }
-    case 'connect':{
+    case 'connect':case 'drag-connect':{
       if(!p.correctConnections?.length)throw new Error(`Missing connection key ${p.id}`);
       const actual=a.connections??[];return result(sameSet(edges(actual),edges(p.correctConnections)),actual.length>0,'Check your connected nodes');
     }
@@ -44,6 +44,14 @@ export function evaluateGeneric(p:Puzzle,a:PuzzleAnswer):ValidationResult {
       const actual=a.trace??[];return result(actual.join('\0')===expected.join('\0'),actual.length>0,'Review the execution trace');
     }
     case 'train':case 'predict':case 'repair':return result(false,false,'Needs contextual training data');
+    case 'slider':{
+      // slider is a specialised numeric kind
+      const spec=p.numeric;
+      if(!spec||!Number.isFinite(spec.expected)||!Number.isFinite(spec.tolerance)||spec.tolerance<0) return result(false,false,'Missing slider spec');
+      const v=a.numberValue;
+      if(v===undefined||!Number.isFinite(v))return result(false,false,'Move the slider');
+      return result(Math.abs(v-spec.expected)<=spec.tolerance,true,'Try a different slider value');
+    }
   }
 }
 /** Fail fast on bad authoring. Never mark a placeholder as playable. */
@@ -51,13 +59,14 @@ export function validatePuzzleSpec(p:Puzzle):void {
   if(!p.id||!p.title?.trim()||!p.instruction?.trim()||!p.hint?.trim()||!p.concept?.trim())throw new Error(`Missing required content: ${p.id}`);
   switch(p.kind){
     case 'choice':case 'predict':case 'repair':if(!p.options?.length&&p.kind!=='predict'||p.kind==='choice'&&!p.options?.some(o=>o.id===p.correctChoice))throw new Error(`Invalid options: ${p.id}`);break;
-    case 'sort':if(!p.items?.length||!p.buckets?.length||p.items.some(i=>!p.correctAssignments?.[i.id]||!p.buckets?.some(b=>b.id===p.correctAssignments?.[i.id])))throw new Error(`Invalid sort: ${p.id}`);break;
+    case 'sort':case 'dataset-label':if(!p.items?.length||!p.buckets?.length||p.items.some(i=>!p.correctAssignments?.[i.id]||!p.buckets?.some(b=>b.id===p.correctAssignments?.[i.id])))throw new Error(`Invalid sort: ${p.id}`);break;
     case 'order':if(!p.steps?.length||!p.correctOrder||!sameSet(p.steps.map(s=>s.id),p.correctOrder))throw new Error(`Invalid order: ${p.id}`);break;
     case 'numeric':if(!p.numeric||!Number.isFinite(p.numeric.expected)||!Number.isFinite(p.numeric.tolerance)||p.numeric.tolerance<0)throw new Error(`Invalid numeric target: ${p.id}`);break;
     case 'multi':if(!p.correctChoices?.length||!p.options?.length||!p.correctChoices.every(x=>p.options?.some(o=>o.id===x)))throw new Error(`Invalid multiple selection: ${p.id}`);break;
-    case 'connect':if(!p.correctConnections?.length)throw new Error(`Invalid graph target: ${p.id}`);break;
+    case 'connect':case 'drag-connect':if(!p.correctConnections?.length)throw new Error(`Invalid graph target: ${p.id}`);break;
     case 'parameters':if(!p.parameterGoal||p.parameterGoal.min>p.parameterGoal.max||p.parameterGoal.tolerance<0||p.parameterGoal.target<p.parameterGoal.min||p.parameterGoal.target>p.parameterGoal.max)throw new Error(`Invalid parameter target: ${p.id}`);break;
     case 'trace':if(!p.correctTrace?.length)throw new Error(`Invalid trace target: ${p.id}`);break;
     case 'train':break;
+    case 'slider':if(!p.numeric||(!Number.isFinite(p.numeric.expected)||!Number.isFinite(p.numeric.tolerance)||p.numeric.tolerance<0))throw new Error(`Invalid slider spec: ${p.id}`);break;
   }
 }

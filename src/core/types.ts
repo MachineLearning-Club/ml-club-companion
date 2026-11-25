@@ -1,5 +1,5 @@
 export type Domain = 'Foundations' | 'Probability & Data' | 'Decision Trees' | 'Clustering & Similarity' | 'Computer Vision' | 'Neural Networks' | 'Generative AI' | 'ML Engineering';
-export type PuzzleKind = 'sort' | 'choice' | 'order' | 'train' | 'predict' | 'repair' | 'numeric' | 'multi' | 'connect' | 'parameters' | 'trace';
+export type PuzzleKind = 'sort' | 'choice' | 'order' | 'train' | 'predict' | 'repair' | 'numeric' | 'multi' | 'connect' | 'parameters' | 'trace' | 'drag-connect' | 'slider' | 'dataset-label';
 export type PuzzleAnswer = {
   assignments?: Record<string, string>;
   selected?: string;
@@ -62,6 +62,7 @@ export type WeekContent = {
   status: 'vertical-slice' | 'planned';
   puzzles: Puzzle[];
   sequences?: SequencePlan[];
+  knowledgeConcepts?: string[];
 };
 export type ProjectBase={schemaVersion:1;id:string;title:string;createdAt:string;updatedAt:string;origin?:string};
 export type ThresholdLabProject=ProjectBase&{kind:'threshold';data:{temperature:number;label:0|1}[];testTemperature:number};

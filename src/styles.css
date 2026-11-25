@@ -14,3 +14,10 @@
 .numeric-editor { display:grid;gap:10px; padding:14px; background:rgba(25,40,63,.7); border-radius:12px; }
 .numeric-editor input[type='range'] {width:100%;accent-color:#32D9EF;}
 .numeric-editor input[type='number'] {min-height:52px;}
+
+.week-badge { display:inline-block; margin-left:6px; padding:1px 7px; border-radius:99px; font-size:.6rem; font-weight:750; letter-spacing:.05em; text-transform:uppercase; }
+.week-badge.vertical-slice { background:#163d44; color:#6ee2e7; border:1px solid #2b6670; }
+.week-badge.planned { background:#232c44; color:#8ca0bf; border:1px solid #394869; }
+.parameter-range { display:flex; justify-content:space-between; font-size:.72rem; color:#8ca0bf; }
+.slider-value { font-size:1rem; font-weight:740; color:#6ee2e7; text-align:right; }
+.trace-steps { display:flex; flex-direction:column; gap:8px; }
